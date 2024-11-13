@@ -1,172 +1,73 @@
-import pygame
-import sys
+import tkinter as tk
+from tkinter import messagebox
 import pandas as pd
 import os
 
-# Initialize pygame
-pygame.init()
-
-# Screen settings
-WIDTH, HEIGHT = 1000, 700
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Smart Study Planner")
-
-# Colors and Fonts
-WHITE = (255, 255, 255)
-BLUE = (70, 130, 180)
-DARK_BLUE = (47, 86, 233)
-LIGHT_BLUE = (100, 181, 246)
-BLACK = (0, 0, 0)
-GRAY = (240, 240, 240)
-RED = (255, 99, 71)
-GREEN = (50, 205, 50)
-SHADOW_COLOR = (0, 0, 0, 100)  # Shadow effect
-ACTIVE_COLOR = (70, 80, 160)
-
-try:
-    font = pygame.font.Font("arial.ttf", 36)
-    small_font = pygame.font.Font("arial.ttf", 24)
-    title_font = pygame.font.Font("arialbd.ttf", 48)
-except:
-    font = pygame.font.SysFont('arial', 36)
-    small_font = pygame.font.SysFont('arial', 24)
-    title_font = pygame.font.SysFont('arial', 48)
-
-# Task data
+# Data and Save File
 study_data = pd.DataFrame(columns=['Subject', 'Duration', 'Priority', 'Deadline'])
-schedule_display = pd.DataFrame()
 SAVE_FILE = 'study_tasks.csv'
 if not os.path.exists(SAVE_FILE):
-    pd.DataFrame(columns=['Subject', 'Duration', 'Priority', 'Deadline']).to_csv(SAVE_FILE, index=False)
+    study_data.to_csv(SAVE_FILE, index=False)
 
-# Message Settings
-message = {"text": "", "color": BLACK, "timer": 0}
+def save_tasks():
+    study_data.to_csv(SAVE_FILE, index=False)
+    messagebox.showinfo("Info", "Tasks saved!")
 
-class FancyButton:
-    def __init__(self, text, rect, color, shadow=True):
-        self.text = text
-        self.rect = rect
-        self.color = color
-        self.shadow = shadow
-    
-    def draw(self):
-        if self.shadow:
-            shadow_rect = pygame.Rect(self.rect.x + 4, self.rect.y + 4, self.rect.width, self.rect.height)
-            pygame.draw.rect(screen, SHADOW_COLOR, shadow_rect, border_radius=15)
-        pygame.draw.rect(screen, self.color, self.rect, border_radius=15)
-        text_surf = font.render(self.text, True, WHITE)
-        screen.blit(text_surf, text_surf.get_rect(center=self.rect.center))
-    
-    def is_clicked(self, pos):
-        return self.rect.collidepoint(pos)
+def load_tasks():
+    global study_data
+    study_data = pd.read_csv(SAVE_FILE)
+    messagebox.showinfo("Info", "Tasks loaded!")
 
-# Buttons with shadow effects
-buttons = {
-    "Add Task": FancyButton("Add Task", pygame.Rect(50, 100, 220, 60), DARK_BLUE),
-    "Generate Schedule": FancyButton("Generate Schedule", pygame.Rect(50, 180, 220, 60), DARK_BLUE),
-    "Save Tasks": FancyButton("Save Tasks", pygame.Rect(50, 260, 220, 60), DARK_BLUE),
-    "Load Tasks": FancyButton("Load Tasks", pygame.Rect(50, 340, 220, 60), DARK_BLUE),
-    "View Schedule": FancyButton("View Schedule", pygame.Rect(50, 420, 220, 60), DARK_BLUE),
-    "Clear All": FancyButton("Clear All", pygame.Rect(50, 500, 220, 60), RED)
-}
+def clear_tasks():
+    global study_data
+    study_data.drop(study_data.index, inplace=True)
+    messagebox.showwarning("Info", "All tasks cleared!")
 
-def draw_gradient_background():
-    gradient_top = (235, 245, 255)
-    gradient_bottom = (255, 255, 255)
-    for y in range(HEIGHT):
-        progress = y / HEIGHT
-        color = [int(gradient_top[i] + (gradient_bottom[i] - gradient_top[i]) * progress) for i in range(3)]
-        pygame.draw.line(screen, color, (0, y), (WIDTH, y))
+def add_task():
+    global study_data
+    task = {
+        'Subject': subject_entry.get(),
+        'Duration': duration_entry.get(),
+        'Priority': priority_entry.get(),
+        'Deadline': deadline_entry.get()
+    }
+    study_data = study_data.append(task, ignore_index=True)
+    messagebox.showinfo("Info", "Task added!")
+    clear_inputs()
 
-def show_message(text, color=BLACK, duration=180):
-    global message
-    message = {"text": text, "color": color, "timer": duration}
+def clear_inputs():
+    subject_entry.delete(0, tk.END)
+    duration_entry.delete(0, tk.END)
+    priority_entry.delete(0, tk.END)
+    deadline_entry.delete(0, tk.END)
 
-def update_message():
-    global message
-    if message["timer"] > 0:
-        message["timer"] -= 1
-        if message["timer"] == 0:
-            message["text"] = ""
+# Tkinter setup
+root = tk.Tk()
+root.title("Smart Study Planner")
+root.geometry("500x400")
 
-def draw_buttons():
-    for button in buttons.values():
-        button.draw()
+# Task Inputs
+tk.Label(root, text="Subject:").grid(row=0, column=0, padx=10, pady=5)
+subject_entry = tk.Entry(root)
+subject_entry.grid(row=0, column=1, padx=10, pady=5)
 
-def draw_input_screen(task_input, active_field):
-    input_panel = pygame.Rect(300, 50, WIDTH - 350, 600)
-    pygame.draw.rect(screen, GRAY, input_panel, border_radius=20)
-    
-    title = title_font.render("Add New Task", True, DARK_BLUE)
-    screen.blit(title, (350, 70))
-    
-    input_fields = ["Subject", "Duration", "Priority", "Deadline"]
-    field_info = [
-        "Enter task name",
-        "Time (HH:MM)",
-        "Priority (1-5)",
-        "Day (e.g., Monday)"
-    ]
-    
-    for i, (field, value) in enumerate(task_input.items()):
-        y_pos = 150 + i * 100
-        label = font.render(f"{field.capitalize()}:", True, DARK_BLUE)
-        screen.blit(label, (350, y_pos))
-        
-        hint_text = small_font.render(field_info[i], True, BLUE)
-        screen.blit(hint_text, (350, y_pos + 30))
-        
-        input_box = pygame.Rect(600, y_pos, 250, 40)
-        color = ACTIVE_COLOR if active_field == field else WHITE
-        pygame.draw.rect(screen, color, input_box, border_radius=8)
-        
-        text_surface = font.render(value, True, BLACK)
-        screen.blit(text_surface, (input_box.x + 10, input_box.y + 5))
+tk.Label(root, text="Duration (HH:MM):").grid(row=1, column=0, padx=10, pady=5)
+duration_entry = tk.Entry(root)
+duration_entry.grid(row=1, column=1, padx=10, pady=5)
 
-# Main game loop
-def main():
-    task_input = {"subject": "", "duration": "", "priority": "", "deadline": ""}
-    active_field = "subject"
-    clock = pygame.time.Clock()
-    screen_mode = "main"
-    
-    while True:
-        screen.fill(WHITE)
-        draw_gradient_background()
-        
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                pos = pygame.mouse.get_pos()
-                if screen_mode == "main":
-                    if buttons["Add Task"].is_clicked(pos):
-                        screen_mode = "add_task"
-                        show_message("Add Task screen opened!", GREEN)
-                    elif buttons["Generate Schedule"].is_clicked(pos):
-                        show_message("Schedule generated!", GREEN)
-                    elif buttons["Save Tasks"].is_clicked(pos):
-                        study_data.to_csv(SAVE_FILE, index=False)
-                        show_message("Tasks saved!", GREEN)
-                    elif buttons["Load Tasks"].is_clicked(pos):
-                        show_message("Tasks loaded!", GREEN)
-                    elif buttons["View Schedule"].is_clicked(pos):
-                        show_message("Viewing schedule!", GREEN)
-                    elif buttons["Clear All"].is_clicked(pos):
-                        study_data.drop(study_data.index, inplace=True)
-                        show_message("All tasks cleared!", RED)
-        
-        if screen_mode == "main":
-            draw_buttons()
-        elif screen_mode == "add_task":
-            draw_input_screen(task_input, active_field)
-        
-        update_message()
-        pygame.display.flip()
-        clock.tick(30)
+tk.Label(root, text="Priority (1-5):").grid(row=2, column=0, padx=10, pady=5)
+priority_entry = tk.Entry(root)
+priority_entry.grid(row=2, column=1, padx=10, pady=5)
 
-if __name__ == "__main__":
-    main()
+tk.Label(root, text="Deadline (e.g., Monday):").grid(row=3, column=0, padx=10, pady=5)
+deadline_entry = tk.Entry(root)
+deadline_entry.grid(row=3, column=1, padx=10, pady=5)
 
+# Buttons
+tk.Button(root, text="Add Task", command=add_task, width=15).grid(row=4, column=0, pady=10)
+tk.Button(root, text="Save Tasks", command=save_tasks, width=15).grid(row=4, column=1, pady=10)
+tk.Button(root, text="Load Tasks", command=load_tasks, width=15).grid(row=5, column=0, pady=10)
+tk.Button(root, text="Clear All Tasks", command=clear_tasks, width=15).grid(row=5, column=1, pady=10)
+
+root.mainloop()
 
